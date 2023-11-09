@@ -13,3 +13,8 @@ And we evaluate the methods using:
 - MAP (Mean Average Precision)
 - MRR (Mean Reciprocal Rank)
 
+
+## Note:
+I have tried my best to harness the power of NumPy and do calculations using matrix multiplication which increases the speed dramatically. 
+
+The current performance bottleneck is processing the docment texts which can be fixed by preprocessing the text and saving it.
