@@ -5,6 +5,7 @@ import numpy as np
 
 rng = np.random.default_rng(seed=1234)
 
+
 def init_pq(n_users, n_items, n_latent):  
     scale = 1./np.sqrt(n_latent)
     loc = 0
@@ -12,22 +13,8 @@ def init_pq(n_users, n_items, n_latent):
     Q0 = rng.normal(loc=loc, scale=scale, size=(n_users, n_latent))
     P0 = rng.normal(loc=loc, scale=scale, size=(n_items, n_latent))
 
-    # Q0[np.abs(Q0) > scale] = 0
-    # P0[np.abs(P0) > scale] = 0
-
-    # s = np.sqrt(n_latent)
-    # s = 1
-    # Q0 = (rng.random(size=(n_users, n_latent))) / s
-    # P0 = (rng.normal(size=(n_items, n_latent))) / s
-
-    # Q0 = np.zeros((n_users, n_latent))
-    # P0 = np.zeros((n_items, n_latent))
-
     return Q0, P0
 
-
-def clip_negative(m):
-    m[m < 0] = 0
 
 def clip(m, a):
     a = np.abs(a)
@@ -52,8 +39,6 @@ def update_pq(r, q, p, reg, lr):
 
 def update_pg_sampled(r, q, p, reg, lr, sample):
     i,j = sample
-    nu = q.shape[0]
-    ni = p.shape[0]
 
     e = r[i][:, j] - q[i] @ p[j].T
     qq = q[i] + lr * (e @ p[j] - reg*q[i])
@@ -115,6 +100,7 @@ def shuffle(m, j=None, rows=True):
     
     return j
 
+
 def revert(m, j, rows=True):
     n = m.shape[0 if rows else 1]
     i = np.arange(n)
@@ -171,9 +157,8 @@ def sampled_single_update(r, q, p, reg, lr, sub=0.05):
         q[i,:] = qq
         p[j,:] = pp
     
+
 def get_batch_sizes():
-    # batch_sizes = [2000, 1000, 500, 400, 300, 200, 100, 70, 50, 40, 30, 25, 20, 15, 12, 10, 5, 4, 4, 3] + 4*[3] + 4*[2] + 4*[1]
-    # batch_sizes = [100] + [50]*3 + [30]*2 + [15]*8 + [5] * 4 + sorted([4, 3, 3,2, 2, 2, 2] * 2, reverse=True) + [1] * 8
     N = 8
     batch_sizes = 2 ** np.arange(N)
     batch_sizes = [[batch_sizes[i]]*((N-i+1)//2) for i in range(N-1)]
@@ -181,6 +166,7 @@ def get_batch_sizes():
     batch_sizes = reduce(lambda a,b: a+b, batch_sizes, [])
     batch_sizes = batch_sizes[::-1]
     return batch_sizes + [1]
+
 
 def matrix_factorization(
         r,
@@ -207,15 +193,11 @@ def matrix_factorization(
     q, p = qp if qp else init_pq(n_users, n_items, n_latent)
     
     init_lr, end_lr = lr if isinstance(lr, tuple) else (lr, lr)
-    # print(init_lr, end_lr)
 
     lr_scheduler = learning_rate_scheduler(n_epochs, init_lr, end_lr, reach_endpoint=True)
     iterator = zip(range(n_epochs), lr_scheduler)
 
     logs = []
-
-    # users = rng.choice(n_users, 30, False)
-    # items = rng.choice(n_items, 10, False)
 
     batch_sizes = get_batch_sizes()
 
@@ -228,11 +210,6 @@ def matrix_factorization(
         if x % batch_bucket_size == 0 and x >= 0:
             batch = batch_sizes[x // batch_bucket_size]
         
-        # heatmap(r[0:30, 0:20])
-        # shuffle_update(r, q, p, reg, lr)
-        # heatmap(r[0:30, 0:20])
-        # break
-
         if epoch < 0.85 * n_ff:
             update_pq(r, q, p, reg, lr)
         elif epoch < n_ff:
@@ -258,15 +235,3 @@ def matrix_factorization(
     err, q, p = min(logs)
 
     return q, p, err, logs
-
-
-
-
-           # heatmap(np.concatenate((errors[users[:, None], items], np.ones((users.shape[0], 4)), r[users[:, None], items]), axis=1))  
-        # else:
-        #     errors, rs = sampled_update(r, q, p, reg, lr)
-        #     if epoch % (print_step*2) == 0:
-        #         pass
-        #         # heatmap(np.concatenate((errors, np.ones((rs.shape[0], 3)), rs)))
-        #         # heatmap(errors)
-        #         # heatmap(rs)
