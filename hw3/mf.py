@@ -74,9 +74,15 @@ def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
     return np.mean(E, axis=0), np.mean(R, axis=0)
 
 
-def error(r, q, p, reg):
+def error(r, q, p, reg=0.001):
     n = r.nonzero()
     e = (r[n] - (q@p.T)[n]).sum() + reg*(q*q)[n[0]].sum() + reg*(p*p)[n[1]].sum()
+    return e
+
+
+def error_pq(r, qp, q, p, reg=0.001):
+    n = r.nonzero()
+    e = (r[n] - qp[n]).sum() + reg*(q*q)[n[0]].sum() + reg*(p*p)[n[1]].sum()
     return e
 
 
@@ -168,25 +174,48 @@ def get_batch_sizes():
     return batch_sizes + [1]
 
 
+def infer(q, p, th=0.2):
+    U, I = q.shape[0], p.shape[0]
+    M = np.zeros((U, I))
+    S = q @ p.T
+    S -= np.mean(S)
+    S /= max(S.min(), S.max())
+    M[S>th] = 1
+    
+    return M
+
+
 def matrix_factorization(
         r,
+        
         lr = (1e-2, 2e-3),
         n_epochs = 10000,
         
         reg = 0.001,
         n_latent = 64,
-        log_step = 10,
-        print_step = 100,
-        eth = 1e-3,
+
+        log_step = -1,
+        print_step = -1,
+        eth = 1e-2,
 
         qp = None,
         sample_s = 0.01,
         batch_sample_s = 0.05,
-        ff = 0.1,
+        ff = 0.05,
 ):
-    err_check = lambda e : np.abs(e) < eth
+    if log_step < 0:
+        log_step = n_epochs // 50
+
+    if print_step < 0:
+        print_step = log_step * 5
+    
+    
     errc_step = min(log_step, print_step)
     assert log_step % errc_step == 0 and print_step % errc_step == 0
+
+    print('log step', log_step)
+
+    err_check = lambda e : np.abs(e) < eth
     loss = error
 
     n_users, n_items = r.shape
@@ -227,7 +256,7 @@ def matrix_factorization(
                 break
 
             if epoch % log_step == 0:
-                logs.append((err, q, p))
+                logs.append((err, q.copy(), p.copy()))
         
             if epoch % print_step == 0:
                 print(f'err: {err:.2e}, lr: {str(lr)[:9]}, last batch: {batch}')
