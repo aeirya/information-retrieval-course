@@ -64,13 +64,17 @@ def update_pg_sampled(r, q, p, reg, lr, sample):
     return e, r[i][:, j]
 
 
-def sampled_update(r, q, p, reg, lr):
+def sampled_update(r, q, p, reg, lr, rounds=4, batch=50):
     n = r.nonzero()
     n_nonzero = n[0].shape[0]
-    samples = rng.choice(n_nonzero, (4, 400), False)
+
+    if rounds < 0:
+        rounds = n_nonzero // batch
+
+    samples = rng.choice(n_nonzero, (rounds, batch), False)
     E = []
     R = []
-    for i in range(4):
+    for i in range(rounds):
         s = samples[i]
         e, rs = update_pg_sampled(r, q, p, reg, lr, (n[0][s], n[1][s]))
         E.append(e)
@@ -126,44 +130,54 @@ def update_shuffled_rows(r, q, p, reg, lr, i0, i1):
     p[:,:] = pp
 
 
-def shuffle_update(r, q, p, reg, lr):
-    clip(q, 2.5)
-    clip(p, 2.5)
+def shuffle_update(r, q, p, reg, lr, clipth=2.5):
+    clip(q, clipth)
+    clip(p, clipth)
 
     j = shuffle(r)
     shuffle(q, j)
 
+    k = shuffle(r, rows=False)
+    shuffle(p, k)
+
     u = r.shape[0]
-    step = 500
-    for i in range(0, 3000, step):
+    step = u // 7
+    for i in range(0, u - step * 2, step):
         update_shuffled_rows(r, q, p, reg, lr, i, i+step)
 
+    revert(r, k, False)
+    revert(p, k)
     revert(r, j)
     revert(q, j)
 
 
-def single_update(r, q, p, reg, lr):
-    for i, j in zip(*r.nonzero()):
+def sampled_single_update(r, q, p, reg, lr):
+    n = r.nonzero()[0].shape[0]
+    non = r.nonzero()
+    sample = rng.choice(n, n//100, False)
+
+    for i, j in zip(non[0][sample], non[1][sample]):
         e = r[i,j] - q[i]@p[j].T
         qq = q[i] + lr * (e * p[j] - reg*q[i])
-        pp = p[j] + lr * (e * q - reg*p[j])
+        pp = p[j] + lr * (e * q[i] - reg*p[j])
         
-        q[i,j] = qq
-        p[i,j] = pp
+        q[i,:] = qq
+        p[j,:] = pp
     
 
 def matrix_factorization(
         r,
-        lr = (1e-3, 1e-5),
+        lr = (1e-2, 2e-3),
         n_epochs = 10000,
         
         reg = 0.001,
         n_latent = 64,
-        log_step = 20,
+        log_step = 10,
         print_step = 100,
         eth = 1e-3,
 
         qp = None,
+        batch = 20,
 ):
     err_check = lambda e : np.abs(e) < eth
     errc_step = min(log_step, print_step)
@@ -173,19 +187,29 @@ def matrix_factorization(
     q, p = qp if qp else init_pq(n_users, n_items, n_latent)
     
     init_lr, end_lr = lr if isinstance(lr, tuple) else (lr, lr)
-    print(init_lr, end_lr)
+    # print(init_lr, end_lr)
 
     lr_scheduler = learning_rate_scheduler(n_epochs, init_lr, end_lr, reach_endpoint=True)
     iterator = zip(range(n_epochs), lr_scheduler)
 
     logs = []
 
-    users = rng.choice(n_users, 30, False)
-    items = rng.choice(n_items, 10, False)
+    # users = rng.choice(n_users, 30, False)
+    # items = rng.choice(n_items, 10, False)
+
+    batch_sizes = [2000, 1000, 500, 400, 300, 200, 100, 70, 50, 40, 30, 25, 20, 15, 12, 10, 5, 4, 4, 3, 2, 1, 1]
 
     for epoch, lr in tqdm(iterator):
-        shuffle_update(r, q, p, reg, lr)
+        batch = batch_sizes[epoch // ((n_epochs // len(batch_sizes))+1)]
         
+        if epoch < 100:
+            update_pq(r, q, p, reg, lr)
+        # elif epoch < 150:
+            # shuffle_update(r, q, p, reg, lr)
+        else:
+            # sampled_single_update(r, q, p, reg, lr)
+            sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch)
+
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)
             
@@ -197,7 +221,7 @@ def matrix_factorization(
                 logs.append((err, q, p))
         
             if epoch % print_step == 0:
-                print(f'err: {err:.2e}, lr: {str(lr)[:9]}')
+                print(f'err: {err:.2e}, lr: {str(lr)[:9]}, batch: {batch}')
 
     err, q, p = min(logs)
 
