@@ -6,15 +6,19 @@ import numpy as np
 rng = np.random.default_rng(seed=1234)
 
 def init_pq(n_users, n_items, n_latent):  
-    scale = 1./np.sqrt(n_latent) / 4
+    scale = 1./np.sqrt(n_latent)
     loc = 0
 
     Q0 = rng.normal(loc=loc, scale=scale, size=(n_users, n_latent))
     P0 = rng.normal(loc=loc, scale=scale, size=(n_items, n_latent))
 
+    # Q0[np.abs(Q0) > scale] = 0
+    # P0[np.abs(P0) > scale] = 0
+
     # s = np.sqrt(n_latent)
-    # Q0 = (rng.random(size=(n_users, n_latent)) - 0.5) / s
-    # P0 = (rng.normal(size=(n_items, n_latent)) - 0.5) / s
+    # s = 1
+    # Q0 = (rng.random(size=(n_users, n_latent))) / s
+    # P0 = (rng.normal(size=(n_items, n_latent))) / s
 
     # Q0 = np.zeros((n_users, n_latent))
     # P0 = np.zeros((n_items, n_latent))
@@ -64,12 +68,14 @@ def update_pg_sampled(r, q, p, reg, lr, sample):
     return e, r[i][:, j]
 
 
-def sampled_update(r, q, p, reg, lr, rounds=4, batch=50):
+def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
     n = r.nonzero()
     n_nonzero = n[0].shape[0]
 
     if rounds < 0:
         rounds = n_nonzero // batch
+    if sub > 0:
+        rounds = int(rounds * sub)
 
     samples = rng.choice(n_nonzero, (rounds, batch), False)
     E = []
@@ -151,10 +157,11 @@ def shuffle_update(r, q, p, reg, lr, clipth=2.5):
     revert(q, j)
 
 
-def sampled_single_update(r, q, p, reg, lr):
+def sampled_single_update(r, q, p, reg, lr, sub=0.05):
     n = r.nonzero()[0].shape[0]
     non = r.nonzero()
-    sample = rng.choice(n, n//100, False)
+    s = int(n * sub) if sub > 0 else n
+    sample = rng.choice(n, s, False)
 
     for i, j in zip(non[0][sample], non[1][sample]):
         e = r[i,j] - q[i]@p[j].T
@@ -164,6 +171,16 @@ def sampled_single_update(r, q, p, reg, lr):
         q[i,:] = qq
         p[j,:] = pp
     
+def get_batch_sizes():
+    # batch_sizes = [2000, 1000, 500, 400, 300, 200, 100, 70, 50, 40, 30, 25, 20, 15, 12, 10, 5, 4, 4, 3] + 4*[3] + 4*[2] + 4*[1]
+    # batch_sizes = [100] + [50]*3 + [30]*2 + [15]*8 + [5] * 4 + sorted([4, 3, 3,2, 2, 2, 2] * 2, reverse=True) + [1] * 8
+    N = 8
+    batch_sizes = 2 ** np.arange(N)
+    batch_sizes = [[batch_sizes[i]]*((N-i+1)//2) for i in range(N-1)]
+    from functools import reduce
+    batch_sizes = reduce(lambda a,b: a+b, batch_sizes, [])
+    batch_sizes = batch_sizes[::-1]
+    return batch_sizes + [1]
 
 def matrix_factorization(
         r,
@@ -177,10 +194,13 @@ def matrix_factorization(
         eth = 1e-3,
 
         qp = None,
-        batch = 20,
+        sample_s = 0.01,
+        batch_sample_s = 0.05,
+        ff = 0.1,
 ):
     err_check = lambda e : np.abs(e) < eth
     errc_step = min(log_step, print_step)
+    assert log_step % errc_step == 0 and print_step % errc_step == 0
     loss = error
 
     n_users, n_items = r.shape
@@ -197,18 +217,30 @@ def matrix_factorization(
     # users = rng.choice(n_users, 30, False)
     # items = rng.choice(n_items, 10, False)
 
-    batch_sizes = [2000, 1000, 500, 400, 300, 200, 100, 70, 50, 40, 30, 25, 20, 15, 12, 10, 5, 4, 4, 3, 2, 1, 1]
+    batch_sizes = get_batch_sizes()
+
+    n_ff = max(20, min(150, int(ff*n_epochs))) # n fastforward
+    batch_bucket_size = ((n_epochs-n_ff) // len(batch_sizes))+1
+    batch = None
 
     for epoch, lr in tqdm(iterator):
-        batch = batch_sizes[epoch // ((n_epochs // len(batch_sizes))+1)]
+        x = epoch-n_ff
+        if x % batch_bucket_size == 0 and x >= 0:
+            batch = batch_sizes[x // batch_bucket_size]
         
-        if epoch < 100:
+        # heatmap(r[0:30, 0:20])
+        # shuffle_update(r, q, p, reg, lr)
+        # heatmap(r[0:30, 0:20])
+        # break
+
+        if epoch < 0.85 * n_ff:
             update_pq(r, q, p, reg, lr)
-        # elif epoch < 150:
-            # shuffle_update(r, q, p, reg, lr)
+        elif epoch < n_ff:
+            shuffle_update(r, q, p, reg, lr)
+        elif batch == 1:
+            sampled_single_update(r, q, p, reg, lr, sub=sample_s)
         else:
-            # sampled_single_update(r, q, p, reg, lr)
-            sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch)
+            sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
 
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)
@@ -221,7 +253,7 @@ def matrix_factorization(
                 logs.append((err, q, p))
         
             if epoch % print_step == 0:
-                print(f'err: {err:.2e}, lr: {str(lr)[:9]}, batch: {batch}')
+                print(f'err: {err:.2e}, lr: {str(lr)[:9]}, last batch: {batch}')
 
     err, q, p = min(logs)
 
