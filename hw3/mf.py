@@ -23,7 +23,7 @@ def clip(m, a):
     m[m < a] = a
 
 
-def update_pq(r, q, p, reg, lr):
+def fast_update_pq(r, q, p, reg, lr):
     clip(q, 2.5)
     clip(p, 2.5)
 
@@ -53,6 +53,9 @@ def update_pg_sampled(r, q, p, reg, lr, sample):
     return e, r[i][:, j]
 
 
+su_samples = None
+n_sample_rows = 0
+
 def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
     n = r.nonzero()
     n_nonzero = n[0].shape[0]
@@ -62,7 +65,9 @@ def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
     if sub > 0:
         rounds = int(rounds * sub)
 
-    samples = rng.choice(n_nonzero, (rounds, batch), False)
+    # samples = rng.choice(n_nonzero, (rounds, batch), False)
+    samples = su_samples
+
     E = []
     R = []
     for i in range(rounds):
@@ -165,8 +170,10 @@ def get_batch_sizes():
     from functools import reduce
     batch_sizes = reduce(lambda a,b: a+b, batch_sizes, [])
     batch_sizes = batch_sizes[::-1]
-    return batch_sizes + [1]
+    return np.array(batch_sizes + [1])
 
+
+# def update_pq(epoch, n_ff, r, q, p, reg, lr, batch, sample_s, batch_sample_s, **kwargs):
 
 def matrix_factorization(
         r,
@@ -184,10 +191,13 @@ def matrix_factorization(
         batch_sample_s = 0.05,
         ff = 0.1,
 ):
+
     err_check = lambda e : np.abs(e) < eth
+    loss = error
+
     errc_step = min(log_step, print_step)
     assert log_step % errc_step == 0 and print_step % errc_step == 0
-    loss = error
+
 
     n_users, n_items = r.shape
     q, p = qp if qp else init_pq(n_users, n_items, n_latent)
@@ -205,19 +215,35 @@ def matrix_factorization(
     batch_bucket_size = ((n_epochs-n_ff) // len(batch_sizes))+1
     batch = None
 
+
+    # n_sample_rows = n_epochs - n_ff - batch_bucket_size * len(batch_sizes[batch_sizes == 1])
+    n = r.nonzero()[0].shape[0]
+    n_sample_rows = ((n // batch_sizes[batch_sizes != 1]) * batch_sample_s).astype(int) * batch_bucket_size
+    cumsr = n_sample_rows.cumsum()
+    all_samples = rng.integers(0, n, (n_sample_rows.sum(), batch_sizes.max()))
+
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff
         if x % batch_bucket_size == 0 and x >= 0:
             batch = batch_sizes[x // batch_bucket_size]
         
+  
         if epoch < 0.85 * n_ff:
-            update_pq(r, q, p, reg, lr)
+            fast_update_pq(r, q, p, reg, lr)
         elif epoch < n_ff:
             shuffle_update(r, q, p, reg, lr)
         elif batch == 1:
             sampled_single_update(r, q, p, reg, lr, sub=sample_s)
         else:
+            if epoch > 0:
+                global su_samples
+                su_samples = all_samples[cumsr[epoch - 1]:cumsr[epoch]]
+            else:
+                su_samples = all_samples[0:cumsr[0]]
+
             sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
+
+
 
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)
