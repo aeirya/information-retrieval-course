@@ -27,7 +27,7 @@ def learning_rate_scheduler(
     n_epochs -= n_warmup
 
     # exponential decrease 
-    if not reach_endpoint:
+    if reach_endpoint:
         n_exp = n_epochs*3//4
     else:
         n_exp = n_epochs
