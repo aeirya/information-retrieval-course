@@ -134,8 +134,8 @@ def shuffle_update(r, q, p, reg, lr):
     shuffle(q, j)
 
     u = r.shape[0]
-    step = u//16
-    for i in range(0, u//4, step):
+    step = 500
+    for i in range(0, 3000, step):
         update_shuffled_rows(r, q, p, reg, lr, i, i+step)
 
     revert(r, j)
@@ -184,13 +184,7 @@ def matrix_factorization(
     items = rng.choice(n_items, 10, False)
 
     for epoch, lr in tqdm(iterator):
-        if epoch < n_epochs//8:
-            errors = update_pq(r, q, p, reg, lr)
-            if epoch % (print_step*2) == 0:
-                pass
-        else:
-            shuffle_update(r, q, p, reg, lr)
-            
+        shuffle_update(r, q, p, reg, lr)
         
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)
