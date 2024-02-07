@@ -15,8 +15,8 @@ def read_df(ds_type):
 def read_interaction_matrix(dataset = 'train'):
     df = read_df(dataset)
     
-    users = set(df['user_id'])
-    items = set(df['item_id'])
+    users = sorted(set(df['user_id']))
+    items = sorted(set(df['item_id']))
 
     grouping = df.groupby(by=['user_id', 'item_id'])
     user_to_id = { x:i for i,x in enumerate(users) }
