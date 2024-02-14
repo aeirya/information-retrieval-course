@@ -202,6 +202,7 @@ def matrix_factorization(
         sample_s = 0.01,
         batch_sample_s = 0.05,
         ff = 0.05,
+        unit_batch_epochs=100,
 ):
     if log_step < 0:
         log_step = n_epochs // 50
@@ -213,7 +214,7 @@ def matrix_factorization(
     errc_step = min(log_step, print_step)
     assert log_step % errc_step == 0 and print_step % errc_step == 0
 
-    print('log step', log_step)
+    # print('log step', log_step)
 
     err_check = lambda e : np.abs(e) < eth
     loss = error
@@ -223,8 +224,13 @@ def matrix_factorization(
     
     init_lr, end_lr = lr if isinstance(lr, tuple) else (lr, lr)
 
-    lr_scheduler = learning_rate_scheduler(n_epochs, init_lr, end_lr, reach_endpoint=True)
-    iterator = zip(range(n_epochs), lr_scheduler)
+    # seperate unit batch epochs from others
+    total_epochs = n_epochs 
+    n_epochs -= + unit_batch_epochs
+
+    lr_scheduler = learning_rate_scheduler(total_epochs, init_lr, end_lr, reach_endpoint=True)
+    
+    iterator = zip(range(total_epochs), lr_scheduler)
 
     logs = []
 
@@ -236,14 +242,14 @@ def matrix_factorization(
 
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff
-        if x % batch_bucket_size == 0 and x >= 0:
+        if x % batch_bucket_size == 0 and x >= 0 and epoch < n_epochs:
             batch = batch_sizes[x // batch_bucket_size]
         
         if epoch < 0.85 * n_ff:
             update_pq(r, q, p, reg, lr)
         elif epoch < n_ff:
             shuffle_update(r, q, p, reg, lr)
-        elif batch == 1:
+        elif batch == 1 or epoch >= n_epochs:
             sampled_single_update(r, q, p, reg, lr, sub=sample_s)
         else:
             sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
