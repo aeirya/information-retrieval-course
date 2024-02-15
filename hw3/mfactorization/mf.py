@@ -66,15 +66,15 @@ def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
         rounds = int(rounds * sub)
 
     samples = rng.choice(n_nonzero, (rounds, batch), False)
-    E = []
-    R = []
+    # E = []
+    # R = []
     for i in range(rounds):
         s = samples[i]
         e, rs = update_pg_sampled(r, q, p, reg, lr, (n[0][s], n[1][s]))
-        E.append(e)
-        R.append(rs)
+        # E.append(e)
+        # R.append(rs)
 
-    return np.mean(E, axis=0), np.mean(R, axis=0)
+    # return np.mean(E, axis=0), np.mean(R, axis=0)
 
 
 def error(r, q, p, reg=0.001):
@@ -149,7 +149,11 @@ def shuffle_update(r, q, p, reg, lr, clipth=2.5):
 def sampled_single_update(r, q, p, reg, lr, sub=0.05):
     n = r.nonzero()[0].shape[0]
     non = r.nonzero()
-    s = int(n * sub) if sub > 0 else 1
+    if sub > 1:
+        s = sub
+    else:
+        s = int(n * sub) if sub > 0 else 1
+
     sample = rng.choice(n, s, False)
 
     for i, j in zip(non[0][sample], non[1][sample]):
@@ -265,8 +269,10 @@ def matrix_factorization(
 
     batch_sizes = get_batch_sizes()
 
-    n_ff = max(20, min(10, int(ff*n_epochs))) # n fastforward
-    batch_bucket_size = ((n_epochs-n_ff) // len(batch_sizes))+1
+    # n_ff = max(20, min(10, int(ff*n_epochs))) # n fastforward
+    n_ff = n_epochs
+    
+    batch_bucket_size = ((total_epochs-n_ff) // len(batch_sizes))+1
     batch = None
 
     # shuffled, totalled, sampled_old = False, False, False
@@ -275,18 +281,20 @@ def matrix_factorization(
 
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff
-        if epoch < n_epochs and x >= 0 and x % batch_bucket_size == 0:
+        if epoch < total_epochs and x >= 0 and x % batch_bucket_size == 0:
             batch = batch_sizes[x // batch_bucket_size]
         
-        if batch == 1 or epoch >= n_epochs or n_epochs == 0 or flag:
-            if single_lr > 0:
-                lr = single_lr
-            sampled_single_update(r, q, p, reg, lr, sub=sample_s)
+        # if batch == 1 or epoch >= n_epochs or n_epochs == 0 or flag:
+        #     if single_lr > 0 and epoch >= n_epochs:
+        #         lr = single_lr
+        #     sampled_single_update(r, q, p, reg, lr, sub=sample_s)
 
-        elif epoch < 0.85 * n_ff:
+        # if epoch < 0.85 * n_ff:
+        #     update_pq(r, q, p, reg, lr)
+        # elif epoch < n_ff:
+        #     shuffle_update(r, q, p, reg, lr)
+        if epoch < n_ff:
             update_pq(r, q, p, reg, lr)
-        elif epoch < n_ff:
-            shuffle_update(r, q, p, reg, lr)
         else:
             sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
 
