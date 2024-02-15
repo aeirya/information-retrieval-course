@@ -269,8 +269,9 @@ def matrix_factorization(
     batch_bucket_size = ((n_epochs-n_ff) // len(batch_sizes))+1
     batch = None
 
-    shuffled, totalled, sampled_old = False, False, False
-    flag = not (shuffled or totalled or sampled_old)
+    # shuffled, totalled, sampled_old = False, False, False
+    # flag = not (shuffled or totalled or sampled_old)
+    flag = False
 
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff

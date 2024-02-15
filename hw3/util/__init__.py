@@ -6,4 +6,4 @@ from .plot import heatmaps
 df_test = data_reader.read_df('test')
 
 def easy_eval(M):
-    return evaluate(M, df_test)['recall']
+    return evaluate(M, df_test)
