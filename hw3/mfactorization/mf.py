@@ -1,4 +1,5 @@
 from .lrschedule import learning_rate_scheduler
+from util import heatmaps
 
 from tqdm import tqdm
 import numpy as np
@@ -9,6 +10,7 @@ rng = np.random.default_rng(seed=1234)
 
 def init_pq(n_users, n_items, n_latent):  
     scale = 1./np.sqrt(n_latent)
+    # scale = 1
     loc = 0
 
     Q0 = rng.normal(loc=loc, scale=scale, size=(n_users, n_latent))
@@ -87,12 +89,6 @@ def error_pq(r, qp, q, p, reg=0.001):
     return e
 
 
-def heatmap(a):
-    import matplotlib.pyplot as plt
-    plt.imshow(a, cmap='hot', interpolation='nearest')
-    plt.show()
-
-
 def shuffle(m, j=None, rows=True):
     n = m.shape[0 if rows else 1]
     i = np.arange(n)
@@ -153,7 +149,7 @@ def shuffle_update(r, q, p, reg, lr, clipth=2.5):
 def sampled_single_update(r, q, p, reg, lr, sub=0.05):
     n = r.nonzero()[0].shape[0]
     non = r.nonzero()
-    s = int(n * sub) if sub > 0 else n
+    s = int(n * sub) if sub > 0 else 1
     sample = rng.choice(n, s, False)
 
     for i, j in zip(non[0][sample], non[1][sample]):
@@ -196,9 +192,10 @@ def steps(n_epochs, log_step, print_step):
     if print_step < 10:
         print_step = n_epochs // print_step
 
+    print_step = print_step // log_step * log_step
+    
     errc_step = min(log_step, print_step) if print_step > 0 else log_step
     
-    print_step = print_step // log_step * log_step
     # print('log step, print step', log_step, print_step)
 
     assert log_step % errc_step == 0 and print_step % errc_step == 0
@@ -225,11 +222,19 @@ def matrix_factorization(
         ff = 0.05,
         single_epochs=100,
 
-        return_err_log=False
+        single_lr = -1,
+
+        return_err_log=False,
+
+        save_logs=False,
+        plot=False
 ):
     '''
     print_step: if less than 10, indicates total print count
     '''
+
+    if n_epochs == 0:
+        n_epochs = single_epochs
 
     errc_step, log_step, print_step = steps(n_epochs, log_step, print_step)
 
@@ -238,12 +243,19 @@ def matrix_factorization(
 
     n_users, n_items = r.shape
     q, p = qp if qp else init_pq(n_users, n_items, n_latent)
-    
+    if qp:
+        q = q.copy()
+        p = p.copy()
+
+    z = np.zeros_like(q)
+    zz = np.zeros_like(p)
+
     init_lr, end_lr = lr if isinstance(lr, tuple) else (lr, lr)
 
+    
     # seperate unit batch epochs from others
     total_epochs = n_epochs 
-    n_epochs -= + single_epochs
+    n_epochs -= single_epochs
 
     lr_scheduler = learning_rate_scheduler(total_epochs, init_lr, end_lr, reach_endpoint=True)
     
@@ -253,38 +265,58 @@ def matrix_factorization(
 
     batch_sizes = get_batch_sizes()
 
-    n_ff = max(20, min(150, int(ff*n_epochs))) # n fastforward
+    n_ff = max(20, min(10, int(ff*n_epochs))) # n fastforward
     batch_bucket_size = ((n_epochs-n_ff) // len(batch_sizes))+1
     batch = None
 
+    shuffled, totalled, sampled_old = False, False, False
+    flag = not (shuffled or totalled or sampled_old)
+
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff
-        if x % batch_bucket_size == 0 and x >= 0 and epoch < n_epochs:
+        if epoch < n_epochs and x >= 0 and x % batch_bucket_size == 0:
             batch = batch_sizes[x // batch_bucket_size]
         
-        if epoch < 0.85 * n_ff:
+        if batch == 1 or epoch >= n_epochs or n_epochs == 0 or flag:
+            if single_lr > 0:
+                lr = single_lr
+            sampled_single_update(r, q, p, reg, lr, sub=sample_s)
+
+        elif epoch < 0.85 * n_ff:
             update_pq(r, q, p, reg, lr)
         elif epoch < n_ff:
             shuffle_update(r, q, p, reg, lr)
-        elif batch == 1 or epoch >= n_epochs:
-            sampled_single_update(r, q, p, reg, lr, sub=sample_s)
         else:
             sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
 
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)
-            
+
             if err_check(err):
                 print(f"error {err:.2e} less than {eth:.2e}")
                 break
 
             if epoch % log_step == 0:
-                logs.append((err, q.copy(), p.copy()))
+                if save_logs:
+                    logs.append((err, q.copy(), p.copy()))
+                else:
+                    logs.append((err, q, p))
         
-            if print_step > 0 and epoch % print_step == 0:
+            # error_change = abs(err - logs[-1][0])
+            # ercth = 1e-7
+            # print("error change", error_change)
+            # if len(logs) > 5 and error_change < ercth:
+            #     print(f"error change less than {ercth}. breaking out")
+            #     print(q.ravel())
+            #     break
+
+            if print_step > 0 and epoch % print_step == 0 and epoch > 0:
                 print(f'err: {err:.2e}, lr: {str(lr)[:9]}', end=' ')
                 if batch:
                     print(f', last batch: {batch}')
+
+                if plot:
+                    heatmaps([q@p.T])
 
     err, q, p = min(logs)
 
