@@ -1,4 +1,5 @@
-from lrschedule import learning_rate_scheduler
+from .lrschedule import learning_rate_scheduler
+
 from tqdm import tqdm
 import numpy as np
 
@@ -185,6 +186,26 @@ def infer(q, p, th=0.2):
     return M
 
 
+def steps(n_epochs, log_step, print_step):
+    if log_step < 0:
+        log_step = n_epochs // 50
+
+    if print_step < 0:
+        print_step = log_step * 5
+    
+    if print_step < 10:
+        print_step = n_epochs // print_step
+
+    errc_step = min(log_step, print_step) if print_step > 0 else log_step
+    
+    print_step = print_step // log_step * log_step
+    # print('log step, print step', log_step, print_step)
+
+    assert log_step % errc_step == 0 and print_step % errc_step == 0
+
+    return errc_step, log_step, print_step
+
+
 def matrix_factorization(
         r,
         
@@ -202,19 +223,15 @@ def matrix_factorization(
         sample_s = 0.01,
         batch_sample_s = 0.05,
         ff = 0.05,
-        unit_batch_epochs=100,
+        single_epochs=100,
+
+        return_err_log=False
 ):
-    if log_step < 0:
-        log_step = n_epochs // 50
+    '''
+    print_step: if less than 10, indicates total print count
+    '''
 
-    if print_step < 0:
-        print_step = log_step * 5
-    
-    
-    errc_step = min(log_step, print_step)
-    assert log_step % errc_step == 0 and print_step % errc_step == 0
-
-    # print('log step', log_step)
+    errc_step, log_step, print_step = steps(n_epochs, log_step, print_step)
 
     err_check = lambda e : np.abs(e) < eth
     loss = error
@@ -226,7 +243,7 @@ def matrix_factorization(
 
     # seperate unit batch epochs from others
     total_epochs = n_epochs 
-    n_epochs -= + unit_batch_epochs
+    n_epochs -= + single_epochs
 
     lr_scheduler = learning_rate_scheduler(total_epochs, init_lr, end_lr, reach_endpoint=True)
     
@@ -264,9 +281,15 @@ def matrix_factorization(
             if epoch % log_step == 0:
                 logs.append((err, q.copy(), p.copy()))
         
-            if epoch % print_step == 0:
-                print(f'err: {err:.2e}, lr: {str(lr)[:9]}, last batch: {batch}')
+            if print_step > 0 and epoch % print_step == 0:
+                print(f'err: {err:.2e}, lr: {str(lr)[:9]}', end=' ')
+                if batch:
+                    print(f', last batch: {batch}')
 
     err, q, p = min(logs)
 
+    if not return_err_log:
+        print(f'best error: {err:.2e}')
+        return q, p
+    
     return q, p, err, logs

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from data_reader import read_df, interaction_matrix
+from .data_reader import read_df, interaction_matrix
 
 
 def user_gold(df, max_k=20):
@@ -13,7 +13,7 @@ def user_gold(df, max_k=20):
     '''
 
     # user2index, item2index, inteRaction matrix
-    u2i, i2i, R = interaction_matrix(df)
+    u2i, i2i, R = interaction_matrix(df, True)
 
     u_len = (R > 0).sum(axis=1)
     K = min(u_len.max(), max_k)
@@ -132,22 +132,29 @@ def rank_correlation(gold, S):
 
 # evaluation handle
 
-def evaluate(S, df=None, report_average=False):
-    if df is None: 
-        df = read_df('train')
+def evaluate(S, df=None, report_average=True, format=True):
+    '''
+    S: Score matrix (estimated R)
+    '''
 
-    R, gold, K, u_len = user_gold(df)
+    if df is None: 
+        df = read_df('test')
+
+    _, gold, K, u_len = user_gold(df)
 
     guess = topk(S, K)
 
     result = {
-        'recall': recall(gold, guess, u_len),
-        'accuracy': accuracy(gold, guess, u_len),
+        'accuracy': 100 * accuracy(gold, guess, u_len),
+        'recall': 100 * recall(gold, guess, u_len),
         'ndcg': ndcg(gold, guess, u_len),
         'rank correlation': rank_correlation(gold, S)
     }
     
     if report_average:
-        return {k:v.mean() for k,v in result.items()}
+        result = {k:v.mean() for k,v in result.items()}
+
+        if format:
+            result = {k: f'{v:.2f}' if v < 10 else f'{int(v)}' for k,v in result.items()}
     
     return result

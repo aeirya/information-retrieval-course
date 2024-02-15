@@ -1,19 +1,25 @@
 import pandas as pd
 import numpy as np
 
-def read_df(ds_type):
+
+def read_df(ds_type, root_dir = ''):
 
     if ds_type not in ['train', 'test']:
         print("invalid dataset")
         return
     
-    ds_type = f'dataset/{ds_type}_dataset.txt'
+    ds_type = root_dir + f'dataset/{ds_type}_dataset.txt'
+    
     df = pd.read_csv(ds_type, delimiter='\t')
     
     return df
 
 
-def interaction_matrix(df, return_id_maps=True):
+def train_test_df(root_dir='', names=['train', 'test']):
+    return [read_df(name, root_dir) for name in names]
+
+
+def interaction_matrix(df, return_id_maps=False):
 
     users = sorted(set(df['user_id']))
     items = sorted(set(df['item_id']))
