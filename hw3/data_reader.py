@@ -25,7 +25,6 @@ def interaction_matrix(df, return_id_maps=True):
     R = np.zeros((len(users), len(items)))
 
     for user, item in grouping.groups.keys():
-        print(user, item)
         user_id = user_to_id[user]
         item_id = item_to_id[item]
         R[user_id, item_id] = 1
