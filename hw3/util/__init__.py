@@ -1,4 +1,4 @@
-from .data_reader import train_test_df, interaction_matrix
+from .data_reader import train_test_df, interaction_matrix, train_test_mtx
 from .evaluation import evaluate, topk
 from .plot import heatmaps
 

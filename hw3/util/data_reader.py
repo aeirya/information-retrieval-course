@@ -19,16 +19,26 @@ def train_test_df(root_dir='', names=['train', 'test']):
     return [read_df(name, root_dir) for name in names]
 
 
-def interaction_matrix(df, return_id_maps=False):
+def train_test_mtx():
+    df, dft = train_test_df()
+    df = df.dropna()
+    dft = dft.dropna()
+    u2i, i2i, R = interaction_matrix(df, True)
+    Rt = interaction_matrix(dft, False, u2i, i2i)
+    
+    return R, Rt
+
+
+def interaction_matrix(df, return_id_maps=False, u2i=None, i2i=None):
 
     users = sorted(set(df['user_id']))
     items = sorted(set(df['item_id']))
+    user_to_id = { x:i for i,x in enumerate(users) } if not u2i else u2i
+    item_to_id = { x:i for i,x in enumerate(items) } if not i2i else i2i
 
+    R = np.zeros((len(user_to_id), len(item_to_id)))
+    
     grouping = df.groupby(by=['user_id', 'item_id'])
-    user_to_id = { x:i for i,x in enumerate(users) }
-    item_to_id = { x:i for i,x in enumerate(items) }
-
-    R = np.zeros((len(users), len(items)))
 
     for user, item in grouping.groups.keys():
         user_id = user_to_id[user]
