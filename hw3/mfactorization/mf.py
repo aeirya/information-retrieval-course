@@ -207,6 +207,13 @@ def steps(n_epochs, log_step, print_step):
     return errc_step, log_step, print_step
 
 
+def f(M, R):
+    return (M * 10)[0:100, 0:50]
+
+def F(M, R):
+    return np.hstack((f(M, R), f(M*R, R)))
+
+
 def matrix_factorization(
         r,
         
@@ -325,7 +332,9 @@ def matrix_factorization(
                     print(f', last batch: {batch}')
 
                 if plot:
-                    heatmaps([q@p.T])
+                    # heatmaps([q@p.T])
+                    M = q@p.T
+                    heatmaps([f(M, r), f(M*r, r)])
 
     err, q, p = min(logs)
 
