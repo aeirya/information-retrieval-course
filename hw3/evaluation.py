@@ -17,7 +17,6 @@ def user_gold(df, max_k=20):
 
     u_len = (R > 0).sum(axis=1)
     K = min(u_len.max(), max_k)
-    # u_len[u_len > K] = K
 
     fav = dict([(user, group.tolist()[::-1]) for user, group in df.groupby('user_id')['item_id']])
     gold = { u2i[user]:[i2i[i] for i in items] for user,items in fav.items() }
@@ -119,9 +118,6 @@ def rank_correlation_fn(gold, scores):
     a = np.arange(n)
     b = scores[gold].argsort()
 
-    # print(a)
-    # print(b)
-
     # spearman
     return 1 - (6*(b - a)**2 / (n * (n**2-1))).sum()
 
@@ -136,7 +132,7 @@ def rank_correlation(gold, S):
 
 # evaluation handle
 
-def evaluate(S, df=None):
+def evaluate(S, df=None, report_average=False):
     if df is None: 
         df = read_df('train')
 
@@ -144,11 +140,14 @@ def evaluate(S, df=None):
 
     guess = topk(S, K)
 
-    # return gold, guess
-
-    return {
+    result = {
         'recall': recall(gold, guess, u_len),
         'accuracy': accuracy(gold, guess, u_len),
         'ndcg': ndcg(gold, guess, u_len),
         'rank correlation': rank_correlation(gold, S)
     }
+    
+    if report_average:
+        return {k:v.mean() for k,v in result.items()}
+    
+    return result
