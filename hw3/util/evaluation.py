@@ -155,6 +155,6 @@ def evaluate(S, df=None, report_average=True, format=True):
         result = {k:v.mean() for k,v in result.items()}
 
         if format:
-            result = {k: f'{v:.2f}' if v < 10 else f'{int(v)}' for k,v in result.items()}
+            result = {k: f'{v:.3f}' if v < 10 else f'{int(v)}' for k,v in result.items()}
     
     return result
