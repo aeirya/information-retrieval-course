@@ -15,7 +15,7 @@ def read_df(ds_type, root_dir = 'dataset'):
     return df
 
 
-def train_test_df(root_dir='', names=['train', 'test']):
+def train_test_df(root_dir='dataset', names=['train', 'test']):
     return [read_df(name, root_dir) for name in names]
 
 
