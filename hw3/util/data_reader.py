@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 
 
-def read_df(ds_type, root_dir = ''):
+def read_df(ds_type, root_dir = 'dataset'):
 
     if ds_type not in ['train', 'test']:
         print("invalid dataset")
         return
     
-    ds_type = root_dir + f'dataset/{ds_type}_dataset.txt'
+    ds_type = f'{root_dir}/{ds_type}_dataset.txt'
     
     df = pd.read_csv(ds_type, delimiter='\t')
     
