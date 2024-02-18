@@ -3,6 +3,22 @@ import numpy as np
 from .data_reader import read_df, interaction_matrix
 
 
+# init
+df_train = None
+df_test = None
+
+gold_train = None
+gold = None
+
+
+def init():
+    from util.data_reader import train_test_df
+    global df_train, df_test, gold_train, gold
+    df_train, df_test = train_test_df()
+    gold = user_gold(df_test)
+    gold_train = user_gold(df_train, max_k=100)
+    
+
 def user_gold(df, max_k=20):
     '''
     returns
@@ -20,6 +36,7 @@ def user_gold(df, max_k=20):
 
     fav = dict([(user, group.tolist()[::-1]) for user, group in df.groupby('user_id')['item_id']])
     gold = { u2i[user]:[i2i[i] for i in items] for user,items in fav.items() }
+    gold = { k:np.array(v) for k,v in gold.items() }
 
     return R, gold, K, u_len
 
@@ -130,18 +147,38 @@ def rank_correlation(gold, S):
     return np.array(scores)
 
 
+# remove items seen in train
+
+def remove_train_items(S):
+    global gold_train
+    S = S.copy()
+   
+    for u, items in gold_train.items():
+       S[u, items] = -np.inf 
+
+    return S
+
+
 # evaluation handle
 
-def evaluate(S, df=None, report_average=True, format=True):
+def evaluate(S, df_test=df_train, df_train=df_test, report_average=True, format=True):
     '''
     S: Score matrix (estimated R)
     '''
 
-    if df is None: 
-        df = read_df('test')
+    if df_test is None: 
+        global gold
+        df_test = read_df('test')
+        _, gold, K, u_len = user_gold(df_test)
+        
 
-    _, gold, K, u_len = user_gold(df)
+    if df_train is None:
+        global gold_train
+        df_train = read_df('train')
+        _, gold_train, _, _ = user_gold(df_train)
 
+
+    S = remove_train_items(S)
     guess = topk(S, K)
 
     result = {
