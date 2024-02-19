@@ -73,10 +73,11 @@ def eval_sorting_for_user(user, fn, guess, gold, u_len):
     retrieved = guess[user, :20]
     gold_n = gold[user]
 
-    if user == 0:
-        print(retrieved)
-        print("------")
-        print(gold_n)
+    # if user == 0:
+    #     print(retrieved)
+    #     print("------")
+    #     print(gold_n)
+    
     return fn(gold_n, retrieved)
 
 
@@ -190,7 +191,7 @@ def evaluate(S, df_test=df_test, df_train=df_train, report_average=True, format=
 
     S = remove_train_items(S)
     guess = topk(S, K)
-    print(guess.shape)
+    # print(guess.shape)
     
     result = {
         # 'accuracy': 100 * accuracy(gold, guess, u_len),
