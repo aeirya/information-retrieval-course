@@ -66,11 +66,15 @@ def sampled_update(r, q, p, reg, lr, rounds=4, batch=50, sub=0.2):
         rounds = int(rounds * sub)
 
     samples = rng.choice(n_nonzero, (rounds, batch), False)
+   
     # E = []
     # R = []
+
     for i in range(rounds):
         s = samples[i]
+        
         e, rs = update_pg_sampled(r, q, p, reg, lr, (n[0][s], n[1][s]))
+        
         # E.append(e)
         # R.append(rs)
 
@@ -228,12 +232,16 @@ def matrix_factorization(
         eth = 1e-2,
 
         qp = None,
-        sample_s = 0.01,
-        batch_sample_s = 0.05,
-        ff = 0.05,
-        single_epochs=100,
 
-        single_lr = -1,
+        # sample_s = 0.01,
+
+        sample_size = 0.05,
+
+        # ff = 0.05,
+
+        sampled_epochs=100,
+
+        # single_lr = -1,
 
         return_err_log=False,
 
@@ -245,7 +253,7 @@ def matrix_factorization(
     '''
 
     if n_epochs == 0:
-        n_epochs = single_epochs
+        n_epochs = sampled_epochs
 
     errc_step, log_step, print_step = steps(n_epochs, log_step, print_step)
 
@@ -253,20 +261,18 @@ def matrix_factorization(
     loss = error
 
     n_users, n_items = r.shape
+    
     q, p = qp if qp else init_pq(n_users, n_items, n_latent)
+    
     if qp:
         q = q.copy()
         p = p.copy()
 
-    z = np.zeros_like(q)
-    zz = np.zeros_like(p)
-
     init_lr, end_lr = lr if isinstance(lr, tuple) else (lr, lr)
 
-    
     # seperate unit batch epochs from others
     total_epochs = n_epochs 
-    n_epochs -= single_epochs
+    n_epochs -= sampled_epochs
 
     lr_scheduler = learning_rate_scheduler(total_epochs, init_lr, end_lr, reach_endpoint=True)
     
@@ -284,13 +290,18 @@ def matrix_factorization(
 
     # shuffled, totalled, sampled_old = False, False, False
     # flag = not (shuffled or totalled or sampled_old)
-    flag = False
+    # flag = False
 
     for epoch, lr in tqdm(iterator):
         x = epoch-n_ff
         if epoch < total_epochs and x >= 0 and x % batch_bucket_size == 0:
             batch = batch_sizes[x // batch_bucket_size]
         
+        '''
+          i not longer use these two methods,
+          i was testing the speed and effectiveness of different simpling and gradient updating methods
+        '''
+
         # if batch == 1 or epoch >= n_epochs or n_epochs == 0 or flag:
         #     if single_lr > 0 and epoch >= n_epochs:
         #         lr = single_lr
@@ -300,10 +311,11 @@ def matrix_factorization(
         #     update_pq(r, q, p, reg, lr)
         # elif epoch < n_ff:
         #     shuffle_update(r, q, p, reg, lr)
+            
         if epoch < n_ff:
             update_pq(r, q, p, reg, lr)
         else:
-            sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=batch_sample_s)
+            sampled_update(r, q, p, reg, lr, rounds=-1, batch=batch, sub=sample_size)
 
         if epoch % errc_step == 0:
             err = loss(r, q, p, reg)

@@ -4,22 +4,31 @@ from .data_reader import read_df, interaction_matrix
 
 
 # init
-df_train = None
-df_test = None
+df_train, df_test = None, None
 
 gold_train = None
-gold = None
+gold, K, u_len = None, None, None
+
+Rtr, Rte = None, None
 
 
 def init():
-    from util.data_reader import train_test_df
-    global df_train, df_test, gold_train, gold
-    df_train, df_test = train_test_df()
-    gold = user_gold(df_test)
-    gold_train = user_gold(df_train, max_k=100)
+    global df_train, df_test, gold_train, gold, K, u_len, Rtr, Rte
     
+    if df_test is None or df_train is None: 
+        print("implict loading of dataframes")
 
-def user_gold(df, max_k=20):
+        from util.data_reader import train_test_mtx as train_test
+        Rtr, Rte, df_train, df_test, u2i, i2i = train_test()
+
+        _, gold, K, u_len = user_gold(df_test, Rte, u2i, i2i)
+        _, gold_train, _, _ = user_gold(df_train, Rtr, u2i, i2i)
+        
+        print("Max items of a user in test dataset:", K)
+
+
+def user_gold(df, R, u2i, i2i, max_k=np.inf):
+# def user_gold(df, max_k=100):
     '''
     returns
         R: interaction matrix
@@ -29,7 +38,7 @@ def user_gold(df, max_k=20):
     '''
 
     # user2index, item2index, inteRaction matrix
-    u2i, i2i, R = interaction_matrix(df, True)
+    # u2i, i2i, R = interaction_matrix(df, True)
 
     u_len = (R > 0).sum(axis=1)
     K = min(u_len.max(), max_k)
@@ -39,6 +48,7 @@ def user_gold(df, max_k=20):
     gold = { k:np.array(v) for k,v in gold.items() }
 
     return R, gold, K, u_len
+
 
 
 def topk(R, k):
@@ -56,10 +66,17 @@ def eval_sorting_for_user(user, fn, guess, gold, u_len):
     utility function for recall and ndcg for each user
     '''
     
-    n = u_len[user]
-    retrieved = guess[user, :n]
-    gold_n = gold[user][:n]
+    # n = u_len[user]
+    # retrieved = guess[user, :n]
+    # gold_n = gold[user][:n]
 
+    retrieved = guess[user, :20]
+    gold_n = gold[user]
+
+    if user == 0:
+        print(retrieved)
+        print("------")
+        print(gold_n)
     return fn(gold_n, retrieved)
 
 
@@ -81,13 +98,13 @@ def recall(gold, guess, u_len):
 
 # accuracy
 
-def acc_fn(gold, guess):
-    best = guess[:20]
-    return len(set(best).intersection(gold)) / len(best)
+# def acc_fn(gold, guess):
+#     best = guess[:20]
+#     return len(set(best).intersection(gold)) / len(best)
 
 
-def accuracy(gold, guess, u_len):
-    return eval_sorting(gold, guess, u_len, acc_fn)
+# def accuracy(gold, guess, u_len):
+#     return eval_sorting(gold, guess, u_len, acc_fn)
 
 
 # dcg
@@ -130,10 +147,13 @@ def rank_correlation_fn(gold, scores):
     '''
     scores: user'th row of scoring matrix S (approximation for R)
     '''
-   
+
     n = len(gold)
     a = np.arange(n)
-    b = scores[gold].argsort()
+    b = (scores[gold]*-1).argsort(kind='mergesort')
+
+    if n == 1:
+        return 1 if a[0] == b[0] else 0
 
     # spearman
     return 1 - (6*(b - a)**2 / (n * (n**2-1))).sum()
@@ -161,32 +181,24 @@ def remove_train_items(S):
 
 # evaluation handle
 
-def evaluate(S, df_test=df_train, df_train=df_test, report_average=True, format=True):
+def evaluate(S, df_test=df_test, df_train=df_train, report_average=True, format=True):
     '''
     S: Score matrix (estimated R)
     '''
 
-    if df_test is None: 
-        global gold
-        df_test = read_df('test')
-        _, gold, K, u_len = user_gold(df_test)
-        
-
-    if df_train is None:
-        global gold_train
-        df_train = read_df('train')
-        _, gold_train, _, _ = user_gold(df_train)
-
+    global gold, K, u_len, gold_train
 
     S = remove_train_items(S)
     guess = topk(S, K)
-
+    print(guess.shape)
+    
     result = {
-        'accuracy': 100 * accuracy(gold, guess, u_len),
+        # 'accuracy': 100 * accuracy(gold, guess, u_len),
         'recall': 100 * recall(gold, guess, u_len),
         'ndcg': ndcg(gold, guess, u_len),
         'rank correlation': rank_correlation(gold, S)
     }
+
     
     if report_average:
         result = {k:v.mean() for k,v in result.items()}
