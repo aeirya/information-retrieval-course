@@ -1,0 +1,7 @@
+1	"سیستمی که در بالا توضیح داده شد ٬ بزرگترین کاربرد خود را در <e1>پیکربندی </e1>آرایه‌ای از <e2>عناصر </e2>آنتن دارد ."
+Component-Whole(e2,e1)
+Comment: Not a collection: there is structure here, organisation. | original: The system as described above has its greatest application in an arrayed configuration of antenna elements . | translated or checked by: hamed,reyhan
+
+2	"<e1>کودک </e1>با دقت توسط بندی به <e2>گهواره </e2>متصل و محدود شده بود ."
+Other
+Comment: | original: The child was carefully wrapped and bound into the cradle by means of a cord . | translated or checked by: mandy,hamed
