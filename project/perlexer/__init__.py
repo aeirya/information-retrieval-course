@@ -1,1 +1,2 @@
-from .perlex import read_dataset as read_perlex
+from .perlex import read_data
+from .util import load_dataset

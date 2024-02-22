@@ -3,15 +3,20 @@ import re
 patterns = {index: re.compile(rf'<e{index}>.*</e{index}>') for index in range(1, 3)}
 
 
-def remove_entities(text):
+def remove_entity_tags(text):
     tag_pattern = r'</?e\d>'
     text = re.sub(tag_pattern, '', text)
     return text
 
 
 def get_entity(text, index):
-    ei = patterns[index].findall(text)[0]
-    return ei[4:-5].strip()
+    tagged_ei = patterns[index].findall(text)[0]
+    ei = remove_entity_tags(tagged_ei)
+    
+    # remove punctuation marks, ...
+    ei = re.sub('[^\w ]', '', ei).strip()
+
+    return ei
 
 
 def extract_entities(text):
@@ -33,7 +38,7 @@ def read_sentence(raw_text):
     index = int(index)
     
     entities = extract_entities(raw)
-    clean_text = remove_entities(raw).strip()
+    clean_text = remove_entity_tags(raw).strip()
 
     return {
         'entities': entities,
@@ -97,7 +102,7 @@ def pd_format(data):
     return df[['id', 'text', 'relation', 'e1', 'e2', 'is_reversed', 'raw']]
 
 
-def read_dataset(path, split_entities=True, return_df=True):
+def read_data(path, split_entities=True, return_df=True):
     '''
     split_entities:
         flattens depth of the tree 
